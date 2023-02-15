@@ -1,95 +1,108 @@
 import { createReadStream } from 'fs';
 import { parseStream, format } from 'fast-csv';
 
+interface csvData {
+  id: string;
+  json: string;
+}
+
+const isSquare = (length: number): boolean =>
+  Number.isInteger(Math.sqrt(length)) ? true : false;
+
 function readFile() {
+  // reading the arguments
   const [, , file] = process.argv;
   const stream = createReadStream(file);
-  const stdoutStream = format({ delimiter: '\t', headers: true });
+  const stdoutStream = format({ delimiter: '\t', headers: true, quoteHeaders: true });
   stdoutStream.pipe(process.stdout);
   parseStream(stream, { headers: true })
     .on('error', (error) => console.error(error))
-    .on('data', (row) => {
+    .on('data', (row: csvData) => {
       const { id, json } = row;
-      const jsonData = JSON.parse(json);
-      if (isSquare(jsonData.length)) {
-        const matrix = convertListToMatrix(jsonData, Math.sqrt(jsonData.length));
-        const table = rotateTable(matrix, Math.sqrt(jsonData.length), Math.sqrt(jsonData.length)).flat();
-        stdoutStream.write({ id, json: table, isValid: true });
-      } else {
-        stdoutStream.write({ id, json: "[]", isValid: false });
+      try {
+        const jsonData: Array<number> = JSON.parse(json);
+        // if the number is square then rotate the data
+        // if not then show empty array
+        if (isSquare(jsonData.length)) {
+          const rotatedCsvData = parseCsvRow(jsonData);
+          stdoutStream.write({ id, json: rotatedCsvData, isValid: true });
+        } else {
+          stdoutStream.write({ id, json: '[]', isValid: false });
+        }
+      } catch (error) {
+        console.log(error);
       }
     })
     .on('end', (rowCount: number) => {});
 }
 
-function isSquare(length: number): boolean {
-  return Number.isInteger(Math.sqrt(length)) ? true : false;
-}
-function convertListToMatrix(list: Array<number>, size: number): number[][] {
-  const matrix = Array.from(
-    { length: Math.ceil(list.length / size) },
-    (elem, index) => list.slice(index * size, index * size + size)
-  );
-  return matrix;
+function parseCsvRow(jsonData: Array<number>): Array<number> {
+  const sizeOfTheMatrix = Math.sqrt(jsonData.length);
+  const matrix = convertListToMatrix(jsonData, sizeOfTheMatrix);
+  const table = rotateTable(matrix, sizeOfTheMatrix).flat();
+  return table;
 }
 
-function rotateTable(list: number[][], m: number, n: number): number[][] {
-  let row = 0,
-    col = 0;
-  let previous, current;
+function convertListToMatrix(list: Array<number>, size: number): number[][] {
+  return Array.from({ length: Math.ceil(list.length / size) }, (elem, index) =>
+    list.slice(index * size, index * size + size)
+  );
+}
+
+function rotateTable(matrix: number[][], matrixSize: number): number[][] {
+  let row: number = 0;
+  let col: number = 0;
+  let previous: number = 0;
+  let current: number = 0;
+  let rowEndIndex: number = matrixSize;
+  let columnEndIndex: number = matrixSize;
 
   /*
   row - Starting row index
-  m - ending row index
   col - starting column index
-  n - ending column index
   */
-  while (row < m && col < n) {
-    if (row + 1 === m || col + 1 === n) break;
+  while (row < rowEndIndex && col < columnEndIndex) {
+    if (row + 1 === rowEndIndex || col + 1 === columnEndIndex) break;
 
     // replace the first element of current row with first element of next row
-    previous = list[row + 1][col];
+    previous = matrix[row + 1][col];
 
-    // Move elements of first row
-    // from the remaining rows
-    for (let i = col; i < n; i++) {
-      current = list[row][i];
-      list[row][i] = previous;
+    // firstrow, moving elements by 1 position
+    for (let i = col; i < columnEndIndex; i++) {
+      current = matrix[row][i];
+      matrix[row][i] = previous;
       previous = current;
     }
     row++;
-    // Move elements of last column
-    // from the remaining columns
-    for (let i = row; i < m; i++) {
-      current = list[i][n - 1];
-      list[i][n - 1] = previous;
+    // last column, moving elements by 1 position
+    for (let i = row; i < rowEndIndex; i++) {
+      current = matrix[i][columnEndIndex - 1];
+      matrix[i][columnEndIndex - 1] = previous;
       previous = current;
     }
-    n--;
+    columnEndIndex--;
 
-    // Move elements of last row
-    // from the remaining rows
-    if (row < m) {
-      for (let i = n - 1; i >= col; i--) {
-        current = list[m - 1][i];
-        list[m - 1][i] = previous;
+    // last row, moving elements by 1 position
+    if (row < rowEndIndex) {
+      for (let i = columnEndIndex - 1; i >= col; i--) {
+        current = matrix[rowEndIndex - 1][i];
+        matrix[rowEndIndex - 1][i] = previous;
         previous = current;
       }
     }
-    m--;
+    rowEndIndex--;
 
-    // Move elements of first column
-    // from the remaining rows
-    if (col < n) {
-      for (let i = m - 1; i >= row; i--) {
-        current = list[i][col];
-        list[i][col] = previous;
+    // first column, moving elements by 1 position
+    if (col < columnEndIndex) {
+      for (let i = rowEndIndex - 1; i >= row; i--) {
+        current = matrix[i][col];
+        matrix[i][col] = previous;
         previous = current;
       }
     }
     col++;
   }
-  return list;
+  return matrix;
 }
 
 readFile();

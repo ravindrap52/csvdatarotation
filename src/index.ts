@@ -6,8 +6,8 @@ interface csvData {
   json: string;
 }
 
-const isSquare = (length: number): boolean =>
-  Number.isInteger(Math.sqrt(length)) ? true : false;
+const isSquare = (length: number): boolean => Number.isInteger(Math.sqrt(length));
+   
 
 function readFile() {
   // reading the arguments
